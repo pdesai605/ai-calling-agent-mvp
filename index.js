@@ -105,15 +105,21 @@ app.post("/speak", async (req, res) => {
     );
 
     const audioBuffer = await response.arrayBuffer();
+    const audioBase64 = Buffer.from(audioBuffer).toString("base64");
 
-    res.setHeader("Content-Type", "audio/mpeg");
-    res.send(Buffer.from(audioBuffer));
+    res.set("Content-Type", "text/xml");
+    res.send(`
+      <Response>
+        <Play>data:audio/mpeg;base64,${audioBase64}</Play>
+      </Response>
+    `);
 
   } catch (err) {
-    console.error("ElevenLabs TTS error:", err);
-    res.status(500).send("Voice generation failed");
+    console.error(err);
+    res.status(500).send("<Response><Say>Voice error</Say></Response>");
   }
 });
+
 
 // Render / local port
 const PORT = process.env.PORT || 3000;
