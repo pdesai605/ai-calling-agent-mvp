@@ -1,35 +1,36 @@
-import express from "express";
-import bodyParser from "body-parser";
+import fetch from "node-fetch";
 
-const app = express();
-app.use(bodyParser.json());
-
-app.get("/", (req, res) => {
-  res.send("AI Calling Agent is running");
-});
-
-/**
- * This endpoint will be called from call flow
- * It receives user text and returns AI response
- */
 app.post("/ai-response", async (req, res) => {
-  const userText =
-    req.body?.input ||
-    req.body?.speech ||
-    "User asked about Aadhaar update";
+  const userText = req.body?.input || "";
 
-  console.log("User said:", userText);
+  try {
+    const response = await fetch(
+      "https://api.elevenlabs.io/v1/ai/generate",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "xi-api-key": process.env.ELEVENLABS_API_KEY
+        },
+        body: JSON.stringify({
+          model: "eleven_multilingual_v2",
+          prompt: `You are a helpful Indian government assistant.
+Answer in the same language as the user.
+User question: ${userText}`
+        })
+      }
+    );
 
-  // TEMP static response for MVP demo
-  const aiReply =
-    "Aadhaar address update ke liye aap online UIDAI website par ja sakte ho. Address proof jaise light bill ya bank statement required hota hai. Aap Aadhaar Seva Kendra par bhi visit kar sakte ho.";
+    const data = await response.json();
 
-  res.json({
-    reply: aiReply,
-  });
-});
+    res.json({
+      reply: data.text || "Please try again"
+    });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  } catch (err) {
+    console.error(err);
+    res.json({
+      reply: "Currently service unavailable"
+    });
+  }
 });
