@@ -1,3 +1,14 @@
+const express = require("express");
+const bodyParser = require("body-parser");
+
+const app = express();
+
+app.use(bodyParser.json());
+
+app.get("/", (req, res) => {
+  res.send("AI Calling Agent is running");
+});
+
 app.post("/ai-response", async (req, res) => {
   const userText = req.body?.input || "";
 
@@ -25,10 +36,15 @@ User question: ${userText}`
       reply: data.text || "Please try again"
     });
 
-  } catch (err) {
-    console.error(err);
+  } catch (error) {
+    console.error(error);
     res.json({
-      reply: "Currently service unavailable"
+      reply: "Service temporarily unavailable"
     });
   }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
