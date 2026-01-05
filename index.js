@@ -1,36 +1,35 @@
-const express = require("express");
-const bodyParser = require("body-parser");
+import express from "express";
+import bodyParser from "body-parser";
 
 const app = express();
-app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
-app.post("/voice", (req, res) => {
-  const userSpeech =
-    req.body.SpeechResult ||
-    req.body.speechResult ||
-    "No input received";
-
-  let reply = "Hu tamaro prashna samji shakti nathi.";
-
-  if (userSpeech.toLowerCase().includes("aadhaar") || userSpeech.toLowerCase().includes("aadhar")) {
-    reply =
-      "Aadhaar card ma address update karva mate address proof joiye. Tame UIDAI ni official website par online update kari shako cho athva najik na Aadhaar Seva Kendra par jai shako cho.";
-  }
-
-  if (userSpeech.toLowerCase().includes("pan")) {
-    reply =
-      "PAN card ma sudharo karva mate NSDL athva UTI website par online form bharva pade che ane supporting documents upload karva pade che.";
-  }
-
-  res.set("Content-Type", "text/xml");
-  res.send(`
-    <Response>
-      <Say>${reply}</Say>
-    </Response>
-  `);
+app.get("/", (req, res) => {
+  res.send("AI Calling Agent is running");
 });
 
-app.listen(3000, () => {
-  console.log("Server running on port 3000");
+/**
+ * This endpoint will be called from call flow
+ * It receives user text and returns AI response
+ */
+app.post("/ai-response", async (req, res) => {
+  const userText =
+    req.body?.input ||
+    req.body?.speech ||
+    "User asked about Aadhaar update";
+
+  console.log("User said:", userText);
+
+  // TEMP static response for MVP demo
+  const aiReply =
+    "Aadhaar address update ke liye aap online UIDAI website par ja sakte ho. Address proof jaise light bill ya bank statement required hota hai. Aap Aadhaar Seva Kendra par bhi visit kar sakte ho.";
+
+  res.json({
+    reply: aiReply,
+  });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
