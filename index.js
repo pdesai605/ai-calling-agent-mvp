@@ -1,8 +1,22 @@
+const express = require("express");
+const bodyParser = require("body-parser");
+
+const app = express();
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Health check
+app.get("/", (req, res) => {
+  res.send("AI Calling Agent is running");
+});
+
+// AI response endpoint
 app.post("/ai-response", async (req, res) => {
-  const userText = req.body?.input || "";
+  const userText = req.body.input || "";
 
   try {
-    const response = await fetch(
+    const openaiResponse = await fetch(
       "https://api.openai.com/v1/chat/completions",
       {
         method: "POST",
@@ -15,7 +29,8 @@ app.post("/ai-response", async (req, res) => {
           messages: [
             {
               role: "system",
-              content: "You are an Indian government service assistant. Answer in the same language as the user. Give correct Aadhaar and PAN update process. Be simple and clear."
+              content:
+                "You are an Indian government service assistant. Answer ONLY Aadhaar and PAN related queries. Reply in the same language as the user (Gujarati, Hindi, or English). Be clear and simple."
             },
             {
               role: "user",
@@ -27,16 +42,28 @@ app.post("/ai-response", async (req, res) => {
       }
     );
 
-    const data = await response.json();
+    const data = await openaiResponse.json();
 
-    res.json({
-      reply: data.choices[0].message.content
-    });
+    const reply =
+      data.choices &&
+      data.choices[0] &&
+      data.choices[0].message &&
+      data.choices[0].message.content
+        ? data.choices[0].message.content
+        : "Krupa kari ne farithi puchho.";
+
+    res.json({ reply });
 
   } catch (error) {
-    console.error(error);
+    console.error("AI error:", error);
     res.json({
-      reply: "Service temporarily unavailable"
+      reply: "Service temporary available nathi. Krupa kari ne thodi vaar pachhi prayatna karo."
     });
   }
+});
+
+// IMPORTANT: use Render port
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
