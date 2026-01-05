@@ -30,37 +30,42 @@ app.post("/ai-response", async (req, res) => {
             {
               role: "system",
               content:
-                "You are an Indian government service assistant. Answer ONLY Aadhaar and PAN related queries. Reply in the same language as the user (Gujarati, Hindi, or English). Be clear and simple."
+                "You are an Indian government service assistant. Reply in the same language as the user."
             },
             {
               role: "user",
               content: userText
             }
-          ],
-          temperature: 0.2
+          ]
         })
       }
     );
 
     const data = await openaiResponse.json();
 
-    const reply =
-      data.choices &&
-      data.choices[0] &&
-      data.choices[0].message &&
-      data.choices[0].message.content
-        ? data.choices[0].message.content
-        : "Krupa kari ne farithi puchho.";
+    console.log("OPENAI RAW RESPONSE:", JSON.stringify(data));
 
-    res.json({ reply });
+    if (data.error) {
+      console.error("OPENAI ERROR:", data.error);
+      return res.json({ reply: "OpenAI error occurred" });
+    }
 
-  } catch (error) {
-    console.error("AI error:", error);
+    if (!data.choices || !data.choices[0]) {
+      return res.json({ reply: "No AI response received" });
+    }
+
     res.json({
-      reply: "Service temporary available nathi. Krupa kari ne thodi vaar pachhi prayatna karo."
+      reply: data.choices[0].message.content
+    });
+
+  } catch (err) {
+    console.error("SERVER ERROR:", err);
+    res.json({
+      reply: "Server error"
     });
   }
 });
+
 
 // IMPORTANT: use Render port
 const PORT = process.env.PORT || 3000;
