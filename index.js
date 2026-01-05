@@ -1,5 +1,3 @@
-import fetch from "node-fetch";
-
 app.post("/ai-response", async (req, res) => {
   const userText = req.body?.input || "";
 
