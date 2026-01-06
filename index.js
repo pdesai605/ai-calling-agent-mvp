@@ -101,6 +101,23 @@ Respond ONLY with the final spoken reply.
     const reply =
       aiData?.choices?.[0]?.message?.content ||
       "Krupa kari ne farithi prayatna karo.";
+// --------------------
+// Language Detection (VERY IMPORTANT)
+// --------------------
+let detectedLanguage = "hi"; // default Hindi
+
+// Gujarati Unicode range
+if (/[\u0A80-\u0AFF]/.test(userSpeech)) {
+  detectedLanguage = "gu";
+}
+// Hindi Devanagari range
+else if (/[\u0900-\u097F]/.test(userSpeech)) {
+  detectedLanguage = "hi";
+}
+// English / Roman
+else {
+  detectedLanguage = "en";
+}
 
     // --------------------
     // ELEVENLABS
