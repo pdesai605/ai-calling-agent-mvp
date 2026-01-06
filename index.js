@@ -1,5 +1,8 @@
 const express = require("express");
 const bodyParser = require("body-parser");
+const crypto = require("crypto");
+
+const audioStore = new Map(); 
 
 const app = express();
 
@@ -11,6 +14,21 @@ app.use(bodyParser.json());
 // --------------------
 app.get("/", (req, res) => {
   res.send("AI Calling Agent is running");
+});
+
+
+app.get("/audio/:id", (req, res) => {
+  const audio = audioStore.get(req.params.id);
+
+  if (!audio) {
+    return res.status(404).send("Audio not found");
+  }
+
+  res.setHeader("Content-Type", "audio/mpeg");
+  res.send(audio);
+
+  // cleanup after serving once
+  setTimeout(() => audioStore.delete(req.params.id), 30000);
 });
 
 // --------------------
@@ -102,18 +120,16 @@ Rules:
       }
     );
 
-    const audioBuffer = await ttsResponse.arrayBuffer();
-    const audioBase64 = Buffer.from(audioBuffer).toString("base64");
+    const audioId = crypto.randomUUID();
+audioStore.set(audioId, Buffer.from(audioBuffer));
 
-    // --------------------
-    // TWIML RESPONSE
-    // --------------------
-    res.type("text/xml");
-    res.send(`
-      <Response>
-        <Play>data:audio/mpeg;base64,${audioBase64}</Play>
-      </Response>
-    `);
+res.type("text/xml");
+res.send(`
+  <Response>
+    <Play>https://ai-calling-agent-mvp.onrender.com/audio/${audioId}</Play>
+  </Response>
+`);
+
 
   } catch (error) {
     console.error("Voice webhook error:", error);
