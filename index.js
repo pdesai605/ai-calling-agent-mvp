@@ -1,13 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-app.set("trust proxy", true);
-
-app.use((req, res, next) => {
-  if (req.headers["x-forwarded-proto"] !== "https") {
-    return res.redirect(`https://${req.headers.host}${req.originalUrl}`);
-  }
-  next();
-});
 
 
 const express = require("express");
@@ -16,7 +8,14 @@ const crypto = require("crypto");
 
 const app = express();
 const AUDIO_DIR = "/tmp/audio";
+app.set("trust proxy", true);
 
+app.use((req, res, next) => {
+  if (req.headers["x-forwarded-proto"] !== "https") {
+    return res.redirect(`https://${req.headers.host}${req.originalUrl}`);
+  }
+  next();
+});
 if (!fs.existsSync(AUDIO_DIR)) {
   fs.mkdirSync(AUDIO_DIR, { recursive: true });
 }
