@@ -135,7 +135,7 @@ Rules:
     // --------------------
     // PUBLIC R2 URL (NO WORKER NEEDED IF PUBLIC)
     // --------------------
-    const audioUrl = `https://${process.env.R2_BUCKET}.${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${key}`;
+    const audioUrl = `https://${process.env.R2_PUBLIC_HOST}/${key}`;
 
     // --------------------
     // TWIML RESPONSE
