@@ -97,23 +97,26 @@ Rules:
     // ELEVENLABS
     // --------------------
     const ttsResponse = await fetch(
-      "https://api.elevenlabs.io/v1/text-to-speech/Wh1QG8ICTAxQWHIbW3SS",
-      {
-        method: "POST",
-        headers: {
-          "xi-api-key": process.env.ELEVENLABS_API_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: reply,
-          model_id: "eleven_multilingual_v2",
-          voice_settings: {
-            stability: 0.55,
-            similarity_boost: 0.65,
-          },
-        }),
-      }
-    );
+  `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}`,
+  {
+    method: "POST",
+    headers: {
+      "xi-api-key": process.env.ELEVENLABS_API_KEY,
+      "Content-Type": "application/json",
+      "Accept": "audio/mpeg"
+    },
+    body: JSON.stringify({
+      text: reply,
+      model_id: "eleven_multilingual_v2"
+    })
+  }
+);
+
+// 🔴 CRITICAL CHECK
+if (!ttsResponse.ok) {
+  const errText = await ttsResponse.text();
+  throw new Error("ElevenLabs error: " + errText);
+}
 
     const audioBuffer = await ttsResponse.arrayBuffer();
 
