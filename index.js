@@ -1,5 +1,13 @@
 const fs = require("fs");
 const path = require("path");
+app.set("trust proxy", true);
+
+app.use((req, res, next) => {
+  if (req.headers["x-forwarded-proto"] !== "https") {
+    return res.redirect(`https://${req.headers.host}${req.originalUrl}`);
+  }
+  next();
+});
 
 
 const express = require("express");
