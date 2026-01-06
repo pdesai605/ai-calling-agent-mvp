@@ -8,14 +8,6 @@ const crypto = require("crypto");
 
 const app = express();
 const AUDIO_DIR = "/tmp/audio";
-app.set("trust proxy", true);
-
-app.use((req, res, next) => {
-  if (req.headers["x-forwarded-proto"] !== "https") {
-    return res.redirect(`https://${req.headers.host}${req.originalUrl}`);
-  }
-  next();
-});
 if (!fs.existsSync(AUDIO_DIR)) {
   fs.mkdirSync(AUDIO_DIR, { recursive: true });
 }
@@ -44,19 +36,27 @@ app.get("/audio/:id", (req, res) => {
   const filePath = path.join(AUDIO_DIR, `${req.params.id}.mp3`);
 
   if (!fs.existsSync(filePath)) {
-    return res.status(404).send("Audio not found");
+    return res.status(404).end();
   }
 
-   res.setHeader("Content-Type", "audio/mpeg");
-  res.sendFile(filePath);
+  const audioStream = fs.createReadStream(filePath);
 
-  // cleanup after 30 seconds
-  setTimeout(() => {
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-  }, 60000);
+  res.writeHead(200, {
+    "Content-Type": "audio/mpeg",
+    "Content-Length": fs.statSync(filePath).size
+  });
+
+  audioStream.pipe(res);
+
+  audioStream.on("close", () => {
+    setTimeout(() => {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }, 60000);
+  });
 });
+
 
 // --------------------
 // TWILIO VOICE WEBHOOK
