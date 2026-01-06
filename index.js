@@ -101,23 +101,6 @@ Respond ONLY with the final spoken reply.
     const reply =
       aiData?.choices?.[0]?.message?.content ||
       "Krupa kari ne farithi prayatna karo.";
-// --------------------
-// Language Detection (VERY IMPORTANT)
-// --------------------
-let detectedLanguage = "hi"; // default Hindi
-
-// Gujarati Unicode range
-if (/[\u0A80-\u0AFF]/.test(userSpeech)) {
-  detectedLanguage = "gu";
-}
-// Hindi Devanagari range
-else if (/[\u0900-\u097F]/.test(userSpeech)) {
-  detectedLanguage = "hi";
-}
-// English / Roman
-else {
-  detectedLanguage = "en";
-}
 
     // --------------------
     // ELEVENLABS
@@ -132,11 +115,9 @@ else {
       "Accept": "audio/mpeg"
     },
     body: JSON.stringify({
-      language: detectedLanguage, // "hi", "gu", or "en"
-  voice_settings: {
-    stability: 0.55,
-    similarity_boost: 0.65
-  }})
+      text: reply,
+      model_id: "eleven_multilingual_v2"
+    })
   }
 );
 
