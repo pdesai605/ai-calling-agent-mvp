@@ -1,8 +1,17 @@
+const fs = require("fs");
+const path = require("path");
+
+
 const express = require("express");
 const bodyParser = require("body-parser");
 const crypto = require("crypto");
 
 const app = express();
+const AUDIO_DIR = "/tmp/audio";
+
+if (!fs.existsSync(AUDIO_DIR)) {
+  fs.mkdirSync(AUDIO_DIR, { recursive: true });
+}
 
 // --------------------
 // Middleware
@@ -13,7 +22,6 @@ app.use(bodyParser.json());
 // --------------------
 // In-memory audio store
 // --------------------
-const audioStore = new Map();
 
 // --------------------
 // Health check
@@ -26,17 +34,21 @@ app.get("/", (req, res) => {
 // Serve audio for Twilio <Play>
 // --------------------
 app.get("/audio/:id", (req, res) => {
-  const audio = audioStore.get(req.params.id);
+  const filePath = path.join(AUDIO_DIR, `${req.params.id}.mp3`);
 
-  if (!audio) {
+  if (!fs.existsSync(filePath)) {
     return res.status(404).send("Audio not found");
   }
 
-  res.setHeader("Content-Type", "audio/mpeg");
-  res.send(audio);
+   res.setHeader("Content-Type", "audio/mpeg");
+  res.sendFile(filePath);
 
   // cleanup after 30 seconds
-  setTimeout(() => audioStore.delete(req.params.id), 30000);
+  setTimeout(() => {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  }, 60000);
 });
 
 // --------------------
@@ -135,14 +147,16 @@ Rules:
     // Store audio & respond with TwiML
     // --------------------
     const audioId = crypto.randomUUID();
-    audioStore.set(audioId, Buffer.from(audioBuffer));
+const audioPath = path.join(AUDIO_DIR, `${audioId}.mp3`);
 
-    res.type("text/xml");
-    res.send(`
-      <Response>
-        <Play>https://ai-calling-agent-mvp.onrender.com/audio/${audioId}</Play>
-      </Response>
-    `);
+fs.writeFileSync(audioPath, Buffer.from(audioBuffer));
+
+res.type("text/xml");
+res.send(`
+  <Response>
+    <Play>https://ai-calling-agent-mvp.onrender.com/audio/${audioId}</Play>
+  </Response>
+`);
 
   } catch (error) {
     console.error("Voice webhook error:", error);
