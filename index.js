@@ -2,12 +2,18 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const crypto = require("crypto");
 
-const audioStore = new Map(); 
-
 const app = express();
 
+// --------------------
+// Middleware
+// --------------------
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+
+// --------------------
+// In-memory audio store
+// --------------------
+const audioStore = new Map();
 
 // --------------------
 // Health check
@@ -16,7 +22,9 @@ app.get("/", (req, res) => {
   res.send("AI Calling Agent is running");
 });
 
-
+// --------------------
+// Serve audio for Twilio <Play>
+// --------------------
 app.get("/audio/:id", (req, res) => {
   const audio = audioStore.get(req.params.id);
 
@@ -27,7 +35,7 @@ app.get("/audio/:id", (req, res) => {
   res.setHeader("Content-Type", "audio/mpeg");
   res.send(audio);
 
-  // cleanup after serving once
+  // cleanup after 30 seconds
   setTimeout(() => audioStore.delete(req.params.id), 30000);
 });
 
@@ -37,7 +45,7 @@ app.get("/audio/:id", (req, res) => {
 app.post("/voice", async (req, res) => {
   const userSpeech = req.body.SpeechResult;
 
-  // First interaction: greet + listen
+  // First call: greet + listen
   if (!userSpeech) {
     res.type("text/xml");
     return res.send(`
@@ -56,7 +64,7 @@ app.post("/voice", async (req, res) => {
 
   try {
     // --------------------
-    // OPENAI (AI BRAIN)
+    // OPENAI (AI brain)
     // --------------------
     const aiResponse = await fetch(
       "https://api.openai.com/v1/chat/completions",
@@ -99,7 +107,7 @@ Rules:
       "Krupa kari ne farithi prayatna karo.";
 
     // --------------------
-    // ELEVENLABS (HUMAN VOICE)
+    // ELEVENLABS (TTS)
     // --------------------
     const ttsResponse = await fetch(
       "https://api.elevenlabs.io/v1/text-to-speech/Wh1QG8ICTAxQWHIbW3SS",
@@ -120,16 +128,21 @@ Rules:
       }
     );
 
+    // ✅ THIS WAS MISSING BEFORE
+    const audioBuffer = await ttsResponse.arrayBuffer();
+
+    // --------------------
+    // Store audio & respond with TwiML
+    // --------------------
     const audioId = crypto.randomUUID();
-audioStore.set(audioId, Buffer.from(audioBuffer));
+    audioStore.set(audioId, Buffer.from(audioBuffer));
 
-res.type("text/xml");
-res.send(`
-  <Response>
-    <Play>https://ai-calling-agent-mvp.onrender.com/audio/${audioId}</Play>
-  </Response>
-`);
-
+    res.type("text/xml");
+    res.send(`
+      <Response>
+        <Play>https://ai-calling-agent-mvp.onrender.com/audio/${audioId}</Play>
+      </Response>
+    `);
 
   } catch (error) {
     console.error("Voice webhook error:", error);
@@ -143,7 +156,7 @@ res.send(`
 });
 
 // --------------------
-// START SERVER
+// Start server
 // --------------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
