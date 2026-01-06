@@ -3,22 +3,44 @@ const bodyParser = require("body-parser");
 
 const app = express();
 
-app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
 
+// --------------------
 // Health check
+// --------------------
 app.get("/", (req, res) => {
   res.send("AI Calling Agent is running");
 });
 
-/**
- * AI TEXT RESPONSE (OpenAI)
- */
-app.post("/ai-response", async (req, res) => {
-  const userText = req.body.input || "";
+// --------------------
+// TWILIO VOICE WEBHOOK
+// --------------------
+app.post("/voice", async (req, res) => {
+  const userSpeech = req.body.SpeechResult;
+
+  // First interaction: greet + listen
+  if (!userSpeech) {
+    res.type("text/xml");
+    return res.send(`
+      <Response>
+        <Gather
+          input="speech"
+          action="/voice"
+          method="POST"
+          language="hi-IN"
+          timeout="6">
+          <Say>Namaskar. Krupa kari ne tamaro prashna bolo.</Say>
+        </Gather>
+      </Response>
+    `);
+  }
 
   try {
-    const openaiResponse = await fetch(
+    // --------------------
+    // OPENAI (AI BRAIN)
+    // --------------------
+    const aiResponse = await fetch(
       "https://api.openai.com/v1/chat/completions",
       {
         method: "POST",
@@ -35,57 +57,33 @@ app.post("/ai-response", async (req, res) => {
               content: `
 You are a trained Indian government helpline officer.
 
-Rules you MUST follow:
-- Answer ONLY Aadhaar and PAN related questions.
-- Reply in the SAME language as the user (Gujarati, Hindi, or English).
-- Speak like a human , not like a document.
-- Give ONLY ONE clear answer, not multiple options.
-- Use 1–2 short, fluent sentences only.
-- Do NOT list steps unless the user explicitly asks for steps.
-- Do NOT say "you can also" or give alternatives.
+Rules:
+- Answer ONLY Aadhaar and PAN related queries.
+- Reply in the SAME language as the user (Hindi, Gujarati, or English).
+- Use 1–2 short, fluent sentences.
+- NEVER ask follow-up questions.
+- If the question is ambiguous, assume the most common case.
 - Sound confident, official, and polite.
-
-Your goal is to sound like a real government call-center agent.
               `
             },
             {
               role: "user",
-              content: userText
+              content: userSpeech
             }
           ]
         })
       }
     );
 
-    const data = await openaiResponse.json();
-
+    const aiData = await aiResponse.json();
     const reply =
-      data?.choices?.[0]?.message?.content ||
-      "Krupa kari ne farithi puchho.";
+      aiData?.choices?.[0]?.message?.content ||
+      "Krupa kari ne farithi prayatna karo.";
 
-    res.json({ reply });
-
-  } catch (err) {
-    console.error("OpenAI error:", err);
-    res.json({
-      reply:
-        "Seva thodi vaar mate uplabdh nathi. Krupa kari ne pachhi prayatna karo."
-    });
-  }
-});
-
-/**
- * ELEVENLABS TEXT → SPEECH (FIXED FINAL VOICE)
- */
-app.post("/speak", async (req, res) => {
-  const text = req.body.text;
-
-  if (!text) {
-    return res.status(400).send("No text provided");
-  }
-
-  try {
-    const response = await fetch(
+    // --------------------
+    // ELEVENLABS (HUMAN VOICE)
+    // --------------------
+    const ttsResponse = await fetch(
       "https://api.elevenlabs.io/v1/text-to-speech/Wh1QG8ICTAxQWHIbW3SS",
       {
         method: "POST",
@@ -94,7 +92,7 @@ app.post("/speak", async (req, res) => {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          text,
+          text: reply,
           model_id: "eleven_multilingual_v2",
           voice_settings: {
             stability: 0.55,
@@ -104,24 +102,33 @@ app.post("/speak", async (req, res) => {
       }
     );
 
-    const audioBuffer = await response.arrayBuffer();
+    const audioBuffer = await ttsResponse.arrayBuffer();
     const audioBase64 = Buffer.from(audioBuffer).toString("base64");
 
-    res.set("Content-Type", "text/xml");
+    // --------------------
+    // TWIML RESPONSE
+    // --------------------
+    res.type("text/xml");
     res.send(`
       <Response>
         <Play>data:audio/mpeg;base64,${audioBase64}</Play>
       </Response>
     `);
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("<Response><Say>Voice error</Say></Response>");
+  } catch (error) {
+    console.error("Voice webhook error:", error);
+    res.type("text/xml");
+    res.send(`
+      <Response>
+        <Say>Seva thodi vaar mate uplabdh nathi.</Say>
+      </Response>
+    `);
   }
 });
 
-
-// Render / local port
+// --------------------
+// START SERVER
+// --------------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
