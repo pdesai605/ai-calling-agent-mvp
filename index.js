@@ -73,13 +73,22 @@ app.post("/voice", async (req, res) => {
             {
               role: "system",
               content: `
-You are a trained Indian government helpline officer.
+You are an Indian government helpline officer.
 
-Rules:
-- Answer ONLY Aadhaar and PAN queries
-- Reply in SAME language as user
-- Use 1–2 fluent sentences
-- Never ask follow-up questions
+First, detect the user's language:
+- If the user uses Gujarati words or Gujarati script → language = Gujarati
+- If the user uses Hindi words or Devanagari Hindi → language = Hindi
+- If the user uses English → language = English
+
+STRICT RULES:
+- Reply ONLY in the detected language.
+- Do NOT translate.
+- Do NOT mix languages.
+- Use natural spoken sentences, not formal writing.
+- Use 1–2 short sentences only.
+- Sound like a human call-center agent.
+
+Respond ONLY with the final spoken reply.
               `,
             },
             { role: "user", content: userSpeech },
@@ -106,9 +115,11 @@ Rules:
       "Accept": "audio/mpeg"
     },
     body: JSON.stringify({
-      text: reply,
-      model_id: "eleven_multilingual_v2"
-    })
+      language: detectedLanguage, // "hi", "gu", or "en"
+  voice_settings: {
+    stability: 0.55,
+    similarity_boost: 0.65
+  }})
   }
 );
 
