@@ -1,26 +1,20 @@
-const fs = require("fs");
-const path = require("path");
-
-
 const express = require("express");
 const bodyParser = require("body-parser");
 const crypto = require("crypto");
 
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+
+// Node 18+ safe fetch
+const fetch = (...args) =>
+  import("node-fetch").then(({ default: fetch }) => fetch(...args));
+
 const app = express();
-const AUDIO_DIR = "/tmp/audio";
-if (!fs.existsSync(AUDIO_DIR)) {
-  fs.mkdirSync(AUDIO_DIR, { recursive: true });
-}
 
 // --------------------
 // Middleware
 // --------------------
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
-
-// --------------------
-// In-memory audio store
-// --------------------
 
 // --------------------
 // Health check
@@ -30,33 +24,16 @@ app.get("/", (req, res) => {
 });
 
 // --------------------
-// Serve audio for Twilio <Play>
+// R2 CLIENT (PUBLIC ACCESS ENABLED)
 // --------------------
-app.get("/audio/:id", (req, res) => {
-  const filePath = path.join(AUDIO_DIR, `${req.params.id}.mp3`);
-
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).end();
-  }
-
-  const audioStream = fs.createReadStream(filePath);
-
-  res.writeHead(200, {
-    "Content-Type": "audio/mpeg",
-    "Content-Length": fs.statSync(filePath).size
-  });
-
-  audioStream.pipe(res);
-
-  audioStream.on("close", () => {
-    setTimeout(() => {
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    }, 60000);
-  });
+const s3 = new S3Client({
+  region: "auto",
+  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+  },
 });
-
 
 // --------------------
 // TWILIO VOICE WEBHOOK
@@ -64,14 +41,14 @@ app.get("/audio/:id", (req, res) => {
 app.post("/voice", async (req, res) => {
   const userSpeech = req.body.SpeechResult;
 
-  // First call: greet + listen
+  // First request: greet + listen
   if (!userSpeech) {
     res.type("text/xml");
     return res.send(`
       <Response>
         <Gather
           input="speech"
-          action="/voice"
+          action="https://ai-calling-agent-mvp.onrender.com/voice"
           method="POST"
           language="hi-IN"
           timeout="6">
@@ -83,7 +60,7 @@ app.post("/voice", async (req, res) => {
 
   try {
     // --------------------
-    // OPENAI (AI brain)
+    // OPENAI
     // --------------------
     const aiResponse = await fetch(
       "https://api.openai.com/v1/chat/completions",
@@ -91,7 +68,7 @@ app.post("/voice", async (req, res) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
         },
         body: JSON.stringify({
           model: "gpt-4o-mini",
@@ -103,20 +80,15 @@ app.post("/voice", async (req, res) => {
 You are a trained Indian government helpline officer.
 
 Rules:
-- Answer ONLY Aadhaar and PAN related queries.
-- Reply in the SAME language as the user (Hindi, Gujarati, or English).
-- Use 1–2 short, fluent sentences.
-- NEVER ask follow-up questions.
-- If the question is ambiguous, assume the most common case.
-- Sound confident, official, and polite.
-              `
+- Answer ONLY Aadhaar and PAN queries
+- Reply in SAME language as user
+- Use 1–2 fluent sentences
+- Never ask follow-up questions
+              `,
             },
-            {
-              role: "user",
-              content: userSpeech
-            }
-          ]
-        })
+            { role: "user", content: userSpeech },
+          ],
+        }),
       }
     );
 
@@ -126,7 +98,7 @@ Rules:
       "Krupa kari ne farithi prayatna karo.";
 
     // --------------------
-    // ELEVENLABS (TTS)
+    // ELEVENLABS
     // --------------------
     const ttsResponse = await fetch(
       "https://api.elevenlabs.io/v1/text-to-speech/Wh1QG8ICTAxQWHIbW3SS",
@@ -134,39 +106,53 @@ Rules:
         method: "POST",
         headers: {
           "xi-api-key": process.env.ELEVENLABS_API_KEY,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           text: reply,
           model_id: "eleven_multilingual_v2",
           voice_settings: {
             stability: 0.55,
-            similarity_boost: 0.65
-          }
-        })
+            similarity_boost: 0.65,
+          },
+        }),
       }
     );
 
-    // ✅ THIS WAS MISSING BEFORE
     const audioBuffer = await ttsResponse.arrayBuffer();
 
     // --------------------
-    // Store audio & respond with TwiML
+    // UPLOAD TO R2 (PUBLIC OBJECT)
     // --------------------
     const audioId = crypto.randomUUID();
-const audioPath = path.join(AUDIO_DIR, `${audioId}.mp3`);
+    const key = `calls/${audioId}.mp3`;
 
-fs.writeFileSync(audioPath, Buffer.from(audioBuffer));
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: process.env.R2_BUCKET,
+        Key: key,
+        Body: Buffer.from(audioBuffer),
+        ContentType: "audio/mpeg",
+      })
+    );
 
-res.type("text/xml");
-res.send(`
-  <Response>
-    <Play>https://ai-calling-agent-mvp.onrender.com/audio/${audioId}</Play>
-  </Response>
-`);
+    // --------------------
+    // PUBLIC R2 URL (NO WORKER NEEDED IF PUBLIC)
+    // --------------------
+    const audioUrl = `https://${process.env.R2_BUCKET}.${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${key}`;
 
-  } catch (error) {
-    console.error("Voice webhook error:", error);
+    // --------------------
+    // TWIML RESPONSE
+    // --------------------
+    res.type("text/xml");
+    res.send(`
+      <Response>
+        <Play>${audioUrl}</Play>
+      </Response>
+    `);
+
+  } catch (err) {
+    console.error("Voice webhook error:", err);
     res.type("text/xml");
     res.send(`
       <Response>
@@ -177,7 +163,7 @@ res.send(`
 });
 
 // --------------------
-// Start server
+// START SERVER
 // --------------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
